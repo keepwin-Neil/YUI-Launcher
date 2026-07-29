@@ -10,8 +10,8 @@
     "check": "node --check main.js && node --check preload.js",
     "start": "electron .",
     "build:mac": "electron-builder --mac dir --arm64",
-    "build:dmg": "electron-builder --mac dmg --arm64",
-    "build:release": "electron-builder --mac dmg zip --arm64 --x64",
+    "build:dmg": "electron-builder --mac dmg --arm64 --publish never",
+    "build:release": "electron-builder --mac dmg zip --arm64 --x64 --publish never",
     "verify:release": "bash scripts/verify-release.sh"
   },
   "build": {
