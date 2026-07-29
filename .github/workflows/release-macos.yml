@@ -47,7 +47,7 @@ jobs:
           shasum -a 256 ./*.dmg ./*.zip > SHA256SUMS.txt
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yui-console-launcher-macos-${{ github.ref_name }}
           path: |
