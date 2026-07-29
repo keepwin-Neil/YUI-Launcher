@@ -1,0 +1,56 @@
+{
+  "name": "yui-neko-launcher",
+  "version": "0.1.0-beta.1",
+  "description": "Unofficial YUI-style desktop launcher for Project N.E.K.O",
+  "main": "main.js",
+  "author": "Neil",
+  "license": "MIT",
+  "scripts": {
+    "audit:runtime": "npm audit --omit=dev",
+    "check": "node --check main.js && node --check preload.js",
+    "start": "electron .",
+    "build:mac": "electron-builder --mac dir --arm64",
+    "build:dmg": "electron-builder --mac dmg --arm64",
+    "build:release": "electron-builder --mac dmg zip --arm64 --x64",
+    "verify:release": "bash scripts/verify-release.sh"
+  },
+  "build": {
+    "appId": "com.neil.yui-neko-launcher",
+    "productName": "YUI Console Launcher",
+    "artifactName": "YUI-Console-Launcher-${version}-${arch}.${ext}",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "legal/LICENSE"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "legal/THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "identity": null,
+      "hardenedRuntime": false,
+      "icon": "build/icon.png",
+      "category": "public.app-category.entertainment",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "YUI Console Launcher 需要使用麦克风支持本地 N.E.K.O 的语音对话功能。",
+        "NSCameraUsageDescription": "YUI Console Launcher 需要使用摄像头支持本地 N.E.K.O 的视觉功能。",
+        "NSScreenCaptureUsageDescription": "YUI Console Launcher 需要屏幕录制权限支持本地 N.E.K.O 的屏幕理解功能。"
+      }
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
+  }
+}

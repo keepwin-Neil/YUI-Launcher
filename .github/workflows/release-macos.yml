@@ -1,0 +1,70 @@
+name: Build macOS release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript
+        run: npm run check
+
+      - name: Audit packaged runtime dependencies
+        run: npm run audit:runtime
+
+      - name: Build unsigned macOS packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:release
+
+      - name: Verify package privacy and allowlist
+        run: npm run verify:release
+
+      - name: Create checksums
+        run: |
+          cd dist
+          shasum -a 256 ./*.dmg ./*.zip > SHA256SUMS.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yui-console-launcher-macos-${{ github.ref_name }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Create GitHub pre-release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/*.dmg \
+            dist/*.zip \
+            dist/SHA256SUMS.txt \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --prerelease

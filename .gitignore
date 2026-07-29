@@ -1,0 +1,45 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local Electron and operating-system state
+.DS_Store
+*.log
+logs/
+Session/
+launcher-settings.json
+
+# Local backups and editor files
+*.backup
+*.bak
+*.swp
+*~
+
+# Secrets and machine-local configuration
+.env*
+!.env.example
+*.pem
+*.p12
+*.pfx
+
+# N.E.K.O runtime data must never enter the launcher repository
+memory/
+config/
+cloudsave/
+state/
+character_cards/
+card_faces/
+live2d/
+vrm/
+mmd/
+pngtuber/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.jsonl
+core_config.json
+token_usage.json
+facts.json
+persona.json
+recent.json
