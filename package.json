@@ -1,7 +1,7 @@
 {
   "name": "yui-neko-launcher",
-  "version": "0.1.0-beta.1",
-  "description": "Unofficial YUI-style desktop launcher for Project N.E.K.O",
+  "version": "0.2.0-beta.1",
+  "description": "Unofficial YUI-style desktop launcher with local face, pose, and gesture recognition for Project N.E.K.O",
   "main": "main.js",
   "author": "Neil",
   "license": "MIT",
@@ -32,6 +32,14 @@
       {
         "from": "THIRD_PARTY_NOTICES.md",
         "to": "legal/THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "vision_service",
+        "to": "vision_service",
+        "filter": [
+          "service.py",
+          "requirements.txt"
+        ]
       }
     ],
     "directories": {

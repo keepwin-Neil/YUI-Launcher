@@ -36,7 +36,7 @@ fi
 
 text_files="$(
   printf '%s\n' "$source_files" |
-    rg '\.(js|mjs|json|md|svg|ya?ml|sh)$' |
+    rg '\.(js|mjs|json|md|svg|ya?ml|sh|py|txt)$' |
     rg -v '(^|/)package-lock\.json$' || true
 )"
 
@@ -82,6 +82,19 @@ if [[ "$actual_asar_files" != "$expected_asar_files" ]]; then
   printf '%s\n' "$actual_asar_files" >&2
   fail "packaged app.asar contains files outside the allowlist"
 fi
+
+echo "Checking packaged vision service allowlist..."
+
+vision_resources="$(dirname "$app_asar")/vision_service"
+[[ -d "$vision_resources" ]] || fail "packaged vision_service directory is missing"
+actual_vision_files="$(cd "$vision_resources" && find . -type f | sort)"
+expected_vision_files="$(printf '%s\n' './requirements.txt' './service.py' | sort)"
+[[ "$actual_vision_files" == "$expected_vision_files" ]] || \
+  fail "packaged vision_service contains missing or unexpected files"
+cmp vision_service/service.py "$vision_resources/service.py" || \
+  fail "packaged vision service does not match the source"
+cmp vision_service/requirements.txt "$vision_resources/requirements.txt" || \
+  fail "packaged vision requirements do not match the source"
 
 echo "Checking build output for personal runtime data..."
 

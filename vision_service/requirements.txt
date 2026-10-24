@@ -1,0 +1,6 @@
+# Install these in N.E.K.O/.venv-vision, not in the main N.E.K.O environment.
+numpy==1.26.4
+opencv-contrib-python==4.11.0.86
+mediapipe==0.10.35
+onnxruntime==1.28.0
+scikit-image==0.26.0

@@ -16,64 +16,106 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 
-const LAUNCHER_NAME = 'YUI Console Launcher';
-const LAUNCHER_DATA_DIR = path.join(
-  app.getPath('appData'),
-  LAUNCHER_NAME
-);
-const SESSION_DATA_DIR = path.join(
-  LAUNCHER_DATA_DIR,
-  'Session'
-);
-const LOG_DIR = path.join(
-  LAUNCHER_DATA_DIR,
-  'logs'
-);
-const SETTINGS_PATH = path.join(
-  LAUNCHER_DATA_DIR,
-  'launcher-settings.json'
-);
-
-/**
- * 使用独立目录保存启动器状态，避免和上游 N.E.K.O 的模型记忆、
- * 配置、缓存与日志混在一起。
- */
-fs.mkdirSync(SESSION_DATA_DIR, {
-  recursive: true,
-});
-fs.mkdirSync(LOG_DIR, {
-  recursive: true,
-});
-
-app.setName(LAUNCHER_NAME);
-app.setPath('userData', LAUNCHER_DATA_DIR);
-app.setPath('sessionData', SESSION_DATA_DIR);
-app.setAppLogsPath(LOG_DIR);
-
 const PRELOAD_PATH = path.join(
   __dirname,
   'preload.js'
 );
+
+/**
+ * 用户提供的新 Logo。
+ *
+ * 已缩放为 256×256 的 JPEG 后内嵌，打包 App 不依赖 Downloads 目录。
+ */
+const BRAND_LOGO_DATA_URL =
+  'data:image/jpeg;base64,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';
 
 /* ============================================================
  * 基本配置
  * ============================================================
  */
 
-let projectDir = null;
-let pythonPath = null;
+/**
+ * N.E.K.O 源码目录。
+ *
+ * 默认查找当前用户的 Projects/N.E.K.O，可通过 NEKO_PROJECT_DIR 指定。
+ */
+const PROJECT_DIR =
+  process.env.NEKO_PROJECT_DIR ||
+  path.join(os.homedir(), 'Projects', 'N.E.K.O');
+
+/**
+ * 使用项目现有的 uv 虚拟环境。
+ */
+const PYTHON_PATH = path.join(
+  PROJECT_DIR,
+  '.venv',
+  'bin',
+  'python'
+);
+
+/**
+ * 视觉模块使用独立环境，避免 OpenCV / NumPy 与主项目依赖冲突。
+ */
+const VISION_PYTHON_PATH =
+  process.env.NEKO_VISION_PYTHON ||
+  path.join(
+    PROJECT_DIR,
+    '.venv-vision',
+    'bin',
+    'python'
+  );
+
+const VISION_SERVICE_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, 'vision_service')
+  : path.join(__dirname, 'vision_service');
+
+const VISION_SERVICE_PATH = path.join(
+  VISION_SERVICE_DIR,
+  'service.py'
+);
+
+/**
+ * Electron 启动的后端日志目录。
+ */
+const LOG_DIR = path.join(
+  os.homedir(),
+  'Library',
+  'Logs',
+  'N.E.K.O'
+);
 
 const MEMORY_URL = 'http://127.0.0.1:48912/health';
 const MAIN_URL = 'http://127.0.0.1:48911/';
+const VISION_URL = 'http://127.0.0.1:48913/health';
+const VISION_ANALYZE_URL =
+  'http://127.0.0.1:48913/analyze';
 
 const MEMORY_START_TIMEOUT_MS = 45_000;
 const MAIN_START_TIMEOUT_MS = 90_000;
+const VISION_START_TIMEOUT_MS = 30_000;
 const HTTP_CHECK_TIMEOUT_MS = 1_500;
+const VISION_REQUEST_TIMEOUT_MS = 8_000;
+const MAX_VISION_FRAME_BYTES = 2 * 1024 * 1024;
+const MAX_VISION_RESPONSE_BYTES = 256 * 1024;
+const UI_WARMUP_REQUEST_TIMEOUT_MS = 10_000;
+const UI_WARMUP_CONCURRENCY = 10;
+const UI_WARMUP_MAX_ASSETS = 240;
 
 let mainWindow = null;
 let loadingPagePromise = null;
 let isQuitting = false;
 let resetInProgress = false;
+let visionStartupPromise = null;
+let mainUiWarmupPromise = null;
+let visionStartupStatus = Object.freeze({
+  phase: 'IDLE',
+  message:
+    '[VISION] deferred until operator selects CONNECT',
+  kind: '',
+  ready: false,
+  error: null,
+  updatedAt: Date.now(),
+});
 
 /**
  * 只记录由当前 Electron 应用启动的 Python 服务。
@@ -241,6 +283,536 @@ function checkUrl(
 }
 
 /**
+ * 使用 Chromium 自己的网络栈读取本地主界面资源。
+ *
+ * 这样 CONNECTING 阶段取到的响应会进入与主窗口相同的
+ * HTTP 缓存；正式跳转时无需再从磁盘重复读取大量 JS/CSS。
+ *
+ * @param {string} targetUrl
+ * @param {RequestCache} cacheMode
+ * @returns {Promise<{
+ *   bytes: number,
+ *   text: string,
+ *   contentType: string
+ * }>}
+ */
+async function fetchUiWarmupResource(
+  targetUrl,
+  cacheMode = 'force-cache'
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, UI_WARMUP_REQUEST_TIMEOUT_MS);
+
+  try {
+    const response =
+      await session.defaultSession.fetch(
+        targetUrl,
+        {
+          method: 'GET',
+          cache: cacheMode,
+          credentials: 'include',
+          signal: controller.signal,
+        }
+      );
+
+    if (!response.ok) {
+      throw new Error(
+        `${response.status} ${response.statusText}`
+      );
+    }
+
+    const body = await response.arrayBuffer();
+    const bytes = body.byteLength;
+    const contentType =
+      response.headers.get('content-type') || '';
+    const text =
+      contentType.includes('text/') ||
+      contentType.includes('json') ||
+      targetUrl.endsWith('.js') ||
+      targetUrl.includes('.js?') ||
+      targetUrl.endsWith('.css') ||
+      targetUrl.includes('.css?')
+        ? Buffer.from(body).toString('utf8')
+        : '';
+
+    return {
+      bytes,
+      text,
+      contentType,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * 限制并发地预取一组本机资源，避免一次性创建上百个请求。
+ *
+ * @param {string[]} urls
+ * @returns {Promise<{
+ *   loaded: number,
+ *   failed: number,
+ *   bytes: number
+ * }>}
+ */
+async function warmUiResourceList(urls) {
+  const queue = Array.from(
+    new Set(urls)
+  ).slice(0, UI_WARMUP_MAX_ASSETS);
+  let nextIndex = 0;
+  let loaded = 0;
+  let failed = 0;
+  let bytes = 0;
+
+  async function worker() {
+    while (nextIndex < queue.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+
+      try {
+        const result =
+          await fetchUiWarmupResource(
+            queue[index]
+          );
+        loaded += 1;
+        bytes += result.bytes;
+      } catch (error) {
+        failed += 1;
+        console.debug(
+          '[Electron] CONNECTING 资源预取跳过：',
+          queue[index],
+          error instanceof Error
+            ? error.message
+            : String(error)
+        );
+      }
+    }
+  }
+
+  const workerCount = Math.max(
+    1,
+    Math.min(
+      UI_WARMUP_CONCURRENCY,
+      queue.length
+    )
+  );
+
+  await Promise.all(
+    Array.from(
+      { length: workerCount },
+      () => worker()
+    )
+  );
+
+  return {
+    loaded,
+    failed,
+    bytes,
+  };
+}
+
+/**
+ * 从主页 HTML 提取同源静态资源。
+ *
+ * @param {string} html
+ * @returns {string[]}
+ */
+function extractMainUiStaticUrls(html) {
+  const urls = new Set();
+  const attributePattern =
+    /\b(?:src|href)\s*=\s*["']([^"'#]+)["']/giu;
+  let match;
+
+  while (
+    (match = attributePattern.exec(html)) !== null
+  ) {
+    try {
+      const parsed = new URL(match[1], MAIN_URL);
+
+      if (
+        parsed.origin === new URL(MAIN_URL).origin &&
+        parsed.pathname.startsWith('/static/')
+      ) {
+        urls.add(parsed.href);
+      }
+    } catch {
+      // 模板中无法解析的占位符不参与预取。
+    }
+  }
+
+  return Array.from(urls);
+}
+
+/**
+ * 从 Cubism model3.json 中提取首次加载可能用到的模型文件。
+ *
+ * @param {Record<string, unknown>} manifest
+ * @param {string} manifestUrl
+ * @returns {string[]}
+ */
+function extractLive2dAssetUrls(
+  manifest,
+  manifestUrl
+) {
+  const urls = new Set();
+  const references =
+    manifest?.FileReferences ||
+    manifest?.fileReferences ||
+    {};
+
+  function addRelative(value) {
+    if (typeof value !== 'string' || !value) {
+      return;
+    }
+
+    try {
+      const parsed = new URL(value, manifestUrl);
+
+      if (
+        parsed.origin === new URL(MAIN_URL).origin
+      ) {
+        urls.add(parsed.href);
+      }
+    } catch {
+      // 忽略模型清单中无效的可选路径。
+    }
+  }
+
+  addRelative(references.Moc);
+  addRelative(references.Physics);
+  addRelative(references.Pose);
+  addRelative(references.UserData);
+  addRelative(references.DisplayInfo);
+
+  for (const texture of references.Textures || []) {
+    addRelative(texture);
+  }
+
+  for (
+    const expression of references.Expressions || []
+  ) {
+    addRelative(expression?.File);
+  }
+
+  for (
+    const motionGroup of Object.values(
+      references.Motions || {}
+    )
+  ) {
+    if (!Array.isArray(motionGroup)) {
+      continue;
+    }
+
+    for (const motion of motionGroup) {
+      addRelative(motion?.File);
+      addRelative(motion?.Sound);
+    }
+  }
+
+  return Array.from(urls);
+}
+
+/**
+ * 预取当前角色模型的清单和首屏依赖。
+ *
+ * 这里只执行无副作用的 GET，不创建角色实例、不连接聊天会话。
+ *
+ * @returns {Promise<{
+ *   loaded: number,
+ *   failed: number,
+ *   bytes: number
+ * }>}
+ */
+async function warmCurrentAvatarAssets() {
+  const emptyResult = {
+    loaded: 0,
+    failed: 0,
+    bytes: 0,
+  };
+
+  try {
+    const pageConfigResult =
+      await fetchUiWarmupResource(
+        new URL(
+          '/api/config/page_config',
+          MAIN_URL
+        ).href,
+        'no-store'
+      );
+    const pageConfig = JSON.parse(
+      pageConfigResult.text
+    );
+    const modelPath = pageConfig?.model_path;
+
+    if (
+      pageConfig?.success !== true ||
+      typeof modelPath !== 'string' ||
+      !modelPath
+    ) {
+      return emptyResult;
+    }
+
+    const modelUrl = new URL(
+      modelPath,
+      MAIN_URL
+    );
+
+    if (
+      modelUrl.origin !== new URL(MAIN_URL).origin
+    ) {
+      return emptyResult;
+    }
+
+    const modelType = String(
+      pageConfig.model_type || 'live2d'
+    ).toLowerCase();
+
+    if (
+      modelType === 'live2d' &&
+      (
+        modelUrl.pathname.endsWith('.json') ||
+        modelUrl.pathname.endsWith('.model3.json')
+      )
+    ) {
+      const manifestResult =
+        await fetchUiWarmupResource(
+          modelUrl.href
+        );
+      const manifest = JSON.parse(
+        manifestResult.text
+      );
+      const assetResult =
+        await warmUiResourceList(
+          extractLive2dAssetUrls(
+            manifest,
+            modelUrl.href
+          )
+        );
+
+      return {
+        loaded: assetResult.loaded + 1,
+        failed: assetResult.failed,
+        bytes:
+          assetResult.bytes +
+          manifestResult.bytes,
+      };
+    }
+
+    const modelResult =
+      await fetchUiWarmupResource(
+        modelUrl.href
+      );
+
+    return {
+      loaded: 1,
+      failed: 0,
+      bytes: modelResult.bytes,
+    };
+  } catch (error) {
+    console.debug(
+      '[Electron] 当前角色资源预取未完成：',
+      error instanceof Error
+        ? error.message
+        : String(error)
+    );
+
+    return {
+      loaded: 0,
+      failed: 1,
+      bytes: 0,
+    };
+  }
+}
+
+/**
+ * 在 CONNECTING 动画期间预热主界面和当前角色资源。
+ *
+ * 多次调用复用同一个 Promise，避免重复读取大文件。
+ */
+function warmMainUiResources() {
+  if (mainUiWarmupPromise) {
+    return mainUiWarmupPromise;
+  }
+
+  const startedAt = Date.now();
+
+  mainUiWarmupPromise = (async () => {
+    const documentResult =
+      await fetchUiWarmupResource(MAIN_URL);
+    const staticUrls =
+      extractMainUiStaticUrls(
+        documentResult.text
+      );
+    const [
+      staticResult,
+      avatarResult,
+    ] = await Promise.all([
+      warmUiResourceList(staticUrls),
+      warmCurrentAvatarAssets(),
+    ]);
+
+    const result = {
+      success: true,
+      durationMs: Date.now() - startedAt,
+      documentBytes: documentResult.bytes,
+      staticAssetCount: staticResult.loaded,
+      avatarAssetCount: avatarResult.loaded,
+      failedCount:
+        staticResult.failed +
+        avatarResult.failed,
+      totalBytes:
+        documentResult.bytes +
+        staticResult.bytes +
+        avatarResult.bytes,
+    };
+
+    console.log(
+      '[Electron] CONNECTING 主界面预热完成：',
+      result
+    );
+
+    return result;
+  })().catch((error) => {
+    mainUiWarmupPromise = null;
+    console.warn(
+      '[Electron] CONNECTING 主界面预热失败：',
+      error
+    );
+
+    return {
+      success: false,
+      durationMs: Date.now() - startedAt,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    };
+  });
+
+  return mainUiWarmupPromise;
+}
+
+/**
+ * 把一帧 JPEG 发送给本机视觉服务并读取派生识别数据。
+ *
+ * @param {Uint8Array | ArrayBuffer} frameBytes
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function analyzeVisionFrame(frameBytes) {
+  const frameBuffer = Buffer.from(frameBytes);
+
+  if (
+    frameBuffer.length <= 0 ||
+    frameBuffer.length > MAX_VISION_FRAME_BYTES
+  ) {
+    return Promise.reject(
+      new Error('摄像头帧大小无效。')
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const target = new URL(VISION_ANALYZE_URL);
+    let settled = false;
+
+    const finishWithError = (error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(error);
+    };
+
+    const request = http.request(
+      {
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': frameBuffer.length,
+          'Cache-Control': 'no-store',
+        },
+      },
+      (response) => {
+        const chunks = [];
+        let receivedBytes = 0;
+
+        response.on('data', (chunk) => {
+          receivedBytes += chunk.length;
+
+          if (
+            receivedBytes >
+            MAX_VISION_RESPONSE_BYTES
+          ) {
+            request.destroy(
+              new Error('视觉服务响应过大。')
+            );
+            return;
+          }
+
+          chunks.push(chunk);
+        });
+
+        response.once('end', () => {
+          if (settled) {
+            return;
+          }
+
+          const statusCode =
+            response.statusCode || 0;
+          const body = Buffer.concat(chunks)
+            .toString('utf8');
+
+          if (
+            statusCode < 200 ||
+            statusCode >= 300
+          ) {
+            finishWithError(
+              new Error(
+                `视觉服务返回 ${statusCode}：${body}`
+              )
+            );
+            return;
+          }
+
+          try {
+            const payload = JSON.parse(body);
+
+            if (!payload || payload.ok !== true) {
+              finishWithError(
+                new Error('视觉服务返回无效数据。')
+              );
+              return;
+            }
+
+            settled = true;
+            resolve(payload);
+          } catch (error) {
+            finishWithError(error);
+          }
+        });
+      }
+    );
+
+    request.setTimeout(
+      VISION_REQUEST_TIMEOUT_MS,
+      () => {
+        request.destroy(
+          new Error('视觉识别请求超时。')
+        );
+      }
+    );
+
+    request.once('error', finishWithError);
+    request.end(frameBuffer);
+  });
+}
+
+/**
  * 循环等待某个服务启动。
  *
  * @param {string} targetUrl
@@ -261,359 +833,126 @@ async function waitForUrl(targetUrl, timeoutMs) {
   return false;
 }
 
+/**
+ * 更新 CONNECT 页面可见的真实视觉启动状态。
+ *
+ * @param {string} phase
+ * @param {string} message
+ * @param {string} [kind]
+ * @param {object} [options]
+ */
+function setVisionStartupStatus(
+  phase,
+  message,
+  kind = '',
+  options = {}
+) {
+  visionStartupStatus = Object.freeze({
+    phase: String(phase || 'UNKNOWN'),
+    message: String(message || ''),
+    kind: String(kind || ''),
+    ready: options.ready === true,
+    error:
+      options.error == null
+        ? null
+        : String(options.error),
+    updatedAt: Date.now(),
+  });
+
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed()
+  ) {
+    mainWindow.webContents.send(
+      'neko:vision-status',
+      visionStartupStatus
+    );
+  }
+
+  return visionStartupStatus;
+}
+
+/**
+ * 解析视觉进程通过 stdout 发出的模型加载阶段。
+ *
+ * @param {string} line
+ */
+function handleVisionServiceOutputLine(line) {
+  const prefix = 'NEKO_VISION_STATUS:';
+
+  if (!line.startsWith(prefix)) {
+    return;
+  }
+
+  try {
+    const payload = JSON.parse(
+      line.slice(prefix.length)
+    );
+
+    setVisionStartupStatus(
+      payload.phase,
+      payload.message,
+      payload.kind,
+      {
+        ready:
+          payload.phase === 'VISION_SERVICE_READY',
+      }
+    );
+  } catch (error) {
+    console.warn(
+      '[Electron] 无法解析视觉服务状态：',
+      line,
+      error
+    );
+  }
+}
+
 /* ============================================================
  * Python 后端管理
  * ============================================================
  */
 
 /**
- * 展开用户输入中的波浪号并规范化路径。
- *
- * @param {unknown} candidate
- * @returns {string}
- */
-function normalizeProjectPath(candidate) {
-  if (
-    typeof candidate !== 'string' ||
-    !candidate.trim()
-  ) {
-    return '';
-  }
-
-  const trimmed = candidate.trim();
-  const expanded = trimmed === '~'
-    ? os.homedir()
-    : trimmed.startsWith(`~${path.sep}`)
-      ? path.join(os.homedir(), trimmed.slice(2))
-      : trimmed;
-
-  return path.resolve(expanded);
-}
-
-/**
- * 返回当前平台虚拟环境中的 Python 路径。
- *
- * @param {string} candidateProjectDir
- * @returns {string}
- */
-function getVirtualEnvironmentPython(
-  candidateProjectDir
-) {
-  return process.platform === 'win32'
-    ? path.join(
-      candidateProjectDir,
-      '.venv',
-      'Scripts',
-      'python.exe'
-    )
-    : path.join(
-      candidateProjectDir,
-      '.venv',
-      'bin',
-      'python'
-    );
-}
-
-/**
- * 只读取启动器自己的设置文件。
- *
- * @returns {{nekoProjectDir?: string}}
- */
-function readLauncherSettings() {
-  try {
-    if (!fs.existsSync(SETTINGS_PATH)) {
-      return {};
-    }
-
-    const parsed = JSON.parse(
-      fs.readFileSync(SETTINGS_PATH, 'utf8')
-    );
-
-    return (
-      parsed &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
-    )
-      ? parsed
-      : {};
-  } catch (error) {
-    console.warn(
-      '[Electron] 无法读取启动器设置，将重新选择项目：',
-      error
-    );
-    return {};
-  }
-}
-
-/**
- * 只保存用户选择的上游源码目录，不复制任何 N.E.K.O 记忆或配置。
- *
- * @param {string} selectedProjectDir
- */
-function saveProjectSelection(selectedProjectDir) {
-  fs.mkdirSync(LAUNCHER_DATA_DIR, {
-    recursive: true,
-  });
-
-  fs.writeFileSync(
-    SETTINGS_PATH,
-    `${JSON.stringify({
-      nekoProjectDir: selectedProjectDir,
-    }, null, 2)}\n`,
-    {
-      encoding: 'utf8',
-      mode: 0o600,
-    }
-  );
-}
-
-/**
- * 检查候选目录是不是可运行的 N.E.K.O 源码目录。
- *
- * @param {unknown} candidate
- * @returns {{
- *   valid: boolean,
- *   projectDir: string,
- *   pythonPath: string,
- *   reason: string
- * }}
- */
-function inspectBackendProject(candidate) {
-  const candidateProjectDir =
-    normalizeProjectPath(candidate);
-  const candidatePythonPath =
-    candidateProjectDir
-      ? getVirtualEnvironmentPython(
-        candidateProjectDir
-      )
-      : '';
-
-  if (
-    !candidateProjectDir ||
-    !fs.existsSync(candidateProjectDir)
-  ) {
-    return {
-      valid: false,
-      projectDir: candidateProjectDir,
-      pythonPath: candidatePythonPath,
-      reason: '目录不存在。',
-    };
-  }
-
-  try {
-    if (!fs.statSync(candidateProjectDir).isDirectory()) {
-      return {
-        valid: false,
-        projectDir: candidateProjectDir,
-        pythonPath: candidatePythonPath,
-        reason: '选择的路径不是文件夹。',
-      };
-    }
-  } catch {
-    return {
-      valid: false,
-      projectDir: candidateProjectDir,
-      pythonPath: candidatePythonPath,
-      reason: '无法读取该文件夹。',
-    };
-  }
-
-  const requiredPaths = [
-    path.join(candidateProjectDir, 'pyproject.toml'),
-    path.join(
-      candidateProjectDir,
-      'app',
-      'memory_server',
-      '__main__.py'
-    ),
-    path.join(
-      candidateProjectDir,
-      'app',
-      'main_server',
-      '__main__.py'
-    ),
-  ];
-
-  const missingProjectFile = requiredPaths.find(
-    (requiredPath) => !fs.existsSync(requiredPath)
-  );
-
-  if (missingProjectFile) {
-    return {
-      valid: false,
-      projectDir: candidateProjectDir,
-      pythonPath: candidatePythonPath,
-      reason:
-        '这不是完整的 Project N.E.K.O 源码目录，' +
-        `缺少 ${path.relative(
-          candidateProjectDir,
-          missingProjectFile
-        )}。`,
-    };
-  }
-
-  if (!fs.existsSync(candidatePythonPath)) {
-    return {
-      valid: false,
-      projectDir: candidateProjectDir,
-      pythonPath: candidatePythonPath,
-      reason:
-        '没有找到 .venv Python。请先按照上游 README ' +
-        '完成依赖安装。',
-    };
-  }
-
-  if (process.platform !== 'win32') {
-    try {
-      fs.accessSync(
-        candidatePythonPath,
-        fs.constants.X_OK
-      );
-    } catch {
-      return {
-        valid: false,
-        projectDir: candidateProjectDir,
-        pythonPath: candidatePythonPath,
-        reason:
-          '虚拟环境 Python 没有执行权限。可以运行：' +
-          `chmod +x "${candidatePythonPath}"`,
-      };
-    }
-  }
-
-  return {
-    valid: true,
-    projectDir: candidateProjectDir,
-    pythonPath: candidatePythonPath,
-    reason: '',
-  };
-}
-
-/**
- * 使用环境变量、上次选择或常见路径查找后端。
- *
- * 找不到时让用户选择，不把开发者电脑路径写进发布包。
- */
-async function resolveBackendEnvironment() {
-  const settings = readLauncherSettings();
-  const candidates = [
-    process.env.NEKO_PROJECT_DIR,
-    settings.nekoProjectDir,
-    path.join(os.homedir(), 'Projects', 'N.E.K.O'),
-    path.join(os.homedir(), 'Documents', 'N.E.K.O'),
-    path.join(os.homedir(), 'Developer', 'N.E.K.O'),
-  ];
-  const checkedPaths = new Set();
-
-  for (const candidate of candidates) {
-    const normalized = normalizeProjectPath(candidate);
-
-    if (!normalized || checkedPaths.has(normalized)) {
-      continue;
-    }
-
-    checkedPaths.add(normalized);
-
-    const inspection = inspectBackendProject(normalized);
-
-    if (inspection.valid) {
-      projectDir = inspection.projectDir;
-      pythonPath = inspection.pythonPath;
-      saveProjectSelection(projectDir);
-      return;
-    }
-  }
-
-  while (true) {
-    const selection = await dialog.showOpenDialog(
-      mainWindow || undefined,
-      {
-        title: '选择 Project N.E.K.O 源码目录',
-        message:
-          '请选择包含 pyproject.toml、app 和 .venv 的 ' +
-          'Project N.E.K.O 根目录。',
-        buttonLabel: '选择此目录',
-        properties: [
-          'openDirectory',
-        ],
-      }
-    );
-
-    if (selection.canceled || !selection.filePaths[0]) {
-      throw new Error(
-        [
-          '未选择 Project N.E.K.O 源码目录。',
-          '',
-          '这个启动器不会内置模型、记忆或 Python 后端。',
-          '请先安装并配置上游项目，然后重新打开启动器。',
-          '',
-          '也可以在启动前设置 NEKO_PROJECT_DIR。',
-        ].join('\n')
-      );
-    }
-
-    const inspection = inspectBackendProject(
-      selection.filePaths[0]
-    );
-
-    if (inspection.valid) {
-      projectDir = inspection.projectDir;
-      pythonPath = inspection.pythonPath;
-      saveProjectSelection(projectDir);
-      return;
-    }
-
-    const response = await dialog.showMessageBox(
-      mainWindow || undefined,
-      {
-        type: 'warning',
-        title: '无法使用这个目录',
-        message: '请选择完整且已经配置好的 N.E.K.O 源码目录。',
-        detail: [
-          inspection.projectDir,
-          inspection.reason,
-        ].filter(Boolean).join('\n\n'),
-        buttons: [
-          '重新选择',
-          '取消启动',
-        ],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true,
-      }
-    );
-
-    if (response.response === 1) {
-      throw new Error(
-        '已取消选择 Project N.E.K.O 源码目录。'
-      );
-    }
-  }
-}
-
-/**
- * 检查已经解析出的项目目录和 Python 环境。
+ * 检查项目目录和 Python 环境。
  */
 function validateBackendEnvironment() {
-  const inspection = inspectBackendProject(projectDir);
-
-  if (!inspection.valid) {
+  if (!fs.existsSync(PROJECT_DIR)) {
     throw new Error(
       [
-        'Project N.E.K.O 后端环境不可用。',
+        '找不到 N.E.K.O 项目目录：',
+        PROJECT_DIR,
         '',
-        inspection.projectDir || '(尚未选择目录)',
-        inspection.reason,
-        '',
-        '可以删除启动器设置后重新选择，或设置 ' +
-          'NEKO_PROJECT_DIR。',
-        `启动器设置：${SETTINGS_PATH}`,
-      ].filter(Boolean).join('\n')
+        '请确认项目仍然位于：',
+        '~/Projects/N.E.K.O',
+      ].join('\n')
     );
   }
 
-  projectDir = inspection.projectDir;
-  pythonPath = inspection.pythonPath;
+  if (!fs.existsSync(PYTHON_PATH)) {
+    throw new Error(
+      [
+        '找不到 N.E.K.O Python 虚拟环境：',
+        PYTHON_PATH,
+        '',
+        '请确认项目中的 .venv 没有被删除。',
+      ].join('\n')
+    );
+  }
+
+  try {
+    fs.accessSync(PYTHON_PATH, fs.constants.X_OK);
+  } catch {
+    throw new Error(
+      [
+        'N.E.K.O Python 文件没有执行权限：',
+        PYTHON_PATH,
+        '',
+        '可以在终端执行：',
+        `chmod +x "${PYTHON_PATH}"`,
+      ].join('\n')
+    );
+  }
 }
 
 /**
@@ -652,10 +991,10 @@ function startPythonService(
   );
 
   const child = spawn(
-    pythonPath,
+    PYTHON_PATH,
     ['-m', moduleName],
     {
-      cwd: projectDir,
+      cwd: PROJECT_DIR,
 
       env: {
         ...process.env,
@@ -711,6 +1050,283 @@ function startPythonService(
   });
 
   return child;
+}
+
+/**
+ * 启动本地视觉服务。该进程不打开摄像头，只分析 Electron 发送的帧。
+ */
+function startVisionService() {
+  const serviceName = 'vision';
+
+  if (startedProcesses.has(serviceName)) {
+    return startedProcesses.get(serviceName);
+  }
+
+  fs.mkdirSync(LOG_DIR, {
+    recursive: true,
+  });
+
+  const logPath = path.join(
+    LOG_DIR,
+    'vision_service-electron.log'
+  );
+  const logFileDescriptor = fs.openSync(
+    logPath,
+    'a'
+  );
+
+  console.log(
+    `[Electron] 正在启动视觉服务：${VISION_SERVICE_PATH}`
+  );
+  setVisionStartupStatus(
+    'PYTHON_RUNTIME_LOADING',
+    '[VISION] starting isolated .venv-vision Python runtime'
+  );
+
+  const child = spawn(
+    VISION_PYTHON_PATH,
+    [
+      VISION_SERVICE_PATH,
+      '--project-dir',
+      PROJECT_DIR,
+      '--port',
+      '48913',
+    ],
+    {
+      cwd: PROJECT_DIR,
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: '1',
+        NEKO_PROJECT_DIR: PROJECT_DIR,
+        NEKO_VISION_PORT: '48913',
+      },
+      stdio: [
+        'ignore',
+        'pipe',
+        logFileDescriptor,
+      ],
+      detached: false,
+    }
+  );
+
+  startedProcesses.set(serviceName, child);
+  let stdoutBuffer = '';
+
+  child.stdout?.on('data', (chunk) => {
+    try {
+      fs.writeSync(logFileDescriptor, chunk);
+    } catch {
+      // 退出过程中日志文件可能已经关闭。
+    }
+
+    stdoutBuffer += chunk.toString('utf8');
+    const lines = stdoutBuffer.split(/\r?\n/);
+    stdoutBuffer = lines.pop() || '';
+
+    for (const line of lines) {
+      handleVisionServiceOutputLine(line.trim());
+    }
+  });
+
+  child.stdout?.once('end', () => {
+    if (stdoutBuffer.trim()) {
+      handleVisionServiceOutputLine(
+        stdoutBuffer.trim()
+      );
+      stdoutBuffer = '';
+    }
+  });
+
+  child.once('spawn', () => {
+    console.log(
+      `[Electron] 视觉服务已创建，PID=${child.pid}`
+    );
+  });
+
+  child.once('error', (error) => {
+    console.error(
+      '[Electron] 视觉服务启动失败：',
+      error
+    );
+    setVisionStartupStatus(
+      'VISION_SERVICE_ERROR',
+      '[ERROR] failed to start local vision process',
+      'warn',
+      {
+        error,
+      }
+    );
+    startedProcesses.delete(serviceName);
+
+    try {
+      fs.closeSync(logFileDescriptor);
+    } catch {
+      // 文件描述符可能已经关闭。
+    }
+  });
+
+  child.once('exit', (code, signal) => {
+    console.log(
+      '[Electron] 视觉服务已退出，' +
+      `code=${code}, signal=${signal}`
+    );
+
+    if (!isQuitting && !resetInProgress) {
+      setVisionStartupStatus(
+        'VISION_SERVICE_ERROR',
+        '[ERROR] local vision process exited unexpectedly',
+        'warn',
+        {
+          error:
+            `code=${code}, signal=${signal}`,
+        }
+      );
+    }
+
+    startedProcesses.delete(serviceName);
+
+    try {
+      fs.closeSync(logFileDescriptor);
+    } catch {
+      // 文件描述符可能已经关闭。
+    }
+  });
+
+  return child;
+}
+
+/**
+ * 确保独立视觉环境、模型和本地服务可用。
+ */
+async function ensureVisionService() {
+  setVisionStartupStatus(
+    'ENVIRONMENT_CHECKING',
+    '[VISION] checking isolated environment and loopback service'
+  );
+
+  if (await checkUrl(VISION_URL)) {
+    console.log(
+      '[Electron] 视觉服务已经运行，直接复用。'
+    );
+    setVisionStartupStatus(
+      'VISION_SERVICE_READY',
+      '[OK] existing local vision service is ready',
+      'ok',
+      {
+        ready: true,
+      }
+    );
+    return;
+  }
+
+  if (!fs.existsSync(VISION_PYTHON_PATH)) {
+    throw new Error(
+      [
+        '找不到视觉模块 Python 环境：',
+        VISION_PYTHON_PATH,
+      ].join('\n')
+    );
+  }
+
+  if (!fs.existsSync(VISION_SERVICE_PATH)) {
+    throw new Error(
+      [
+        '找不到视觉服务脚本：',
+        VISION_SERVICE_PATH,
+      ].join('\n')
+    );
+  }
+
+  setVisionStartupStatus(
+    'ENVIRONMENT_READY',
+    '[OK] .venv-vision and local service entrypoint verified',
+    'ok'
+  );
+  startVisionService();
+
+  const ready = await waitForUrl(
+    VISION_URL,
+    VISION_START_TIMEOUT_MS
+  );
+
+  if (!ready) {
+    throw new Error(
+      [
+        '视觉服务启动超时。',
+        '',
+        '日志位置：',
+        path.join(
+          LOG_DIR,
+          'vision_service-electron.log'
+        ),
+      ].join('\n')
+    );
+  }
+
+  console.log('[Electron] 视觉服务已准备好。');
+  setVisionStartupStatus(
+    'VISION_SERVICE_READY',
+    '[OK] face, pose, and hand models ready on loopback:48913',
+    'ok',
+    {
+      ready: true,
+    }
+  );
+}
+
+/**
+ * 只在用户点击 CONNECT 后启动视觉环境和模型。
+ *
+ * 多次调用会复用同一个启动 Promise，避免重复加载模型。
+ */
+function prepareVisionAfterConnect() {
+  if (visionStartupStatus.ready) {
+    return Promise.resolve({
+      success: true,
+      status: visionStartupStatus,
+    });
+  }
+
+  if (visionStartupPromise) {
+    return visionStartupPromise;
+  }
+
+  visionStartupPromise = ensureVisionService()
+    .then(() => ({
+      success: true,
+      status: visionStartupStatus,
+    }))
+    .catch((error) => {
+      console.error(
+        '[Electron] CONNECT 后视觉服务启动失败：',
+        error
+      );
+
+      setVisionStartupStatus(
+        'VISION_SERVICE_ERROR',
+        '[ERROR] local face / pose / hand models failed to initialize',
+        'warn',
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        }
+      );
+
+      visionStartupPromise = null;
+
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
+        status: visionStartupStatus,
+      };
+    });
+
+  return visionStartupPromise;
 }
 
 /**
@@ -799,21 +1415,7 @@ async function ensureMainServer() {
  * 启动并检查两个必要服务。
  */
 async function ensureBackend() {
-  const [
-    memoryAlreadyRunning,
-    mainAlreadyRunning,
-  ] = await Promise.all([
-    checkUrl(MEMORY_URL),
-    checkUrl(MAIN_URL),
-  ]);
-
-  if (
-    !memoryAlreadyRunning ||
-    !mainAlreadyRunning
-  ) {
-    await resolveBackendEnvironment();
-    validateBackendEnvironment();
-  }
+  validateBackendEnvironment();
 
   await ensureMemoryServer();
   await ensureMainServer();
@@ -1073,10 +1675,17 @@ function createLoadingHtml() {
       letter-spacing: 0.12em;
     }
 
-    .system-mark svg {
+    .system-mark img {
       width: 22px;
       height: 22px;
-      color: var(--mint-bright);
+      flex: 0 0 auto;
+      object-fit: cover;
+      filter:
+        invert(1)
+        grayscale(1)
+        brightness(1.75)
+        contrast(1.22);
+      mix-blend-mode: screen;
     }
 
     .toolbar-label {
@@ -1683,20 +2292,11 @@ function createLoadingHtml() {
 
     <nav class="tool-bar" aria-label="system controls">
       <div class="system-mark">
-        <svg
-          viewBox="0 0 64 64"
-          fill="none"
+        <img
+          src="${BRAND_LOGO_DATA_URL}"
+          alt=""
           aria-hidden="true"
         >
-          <path
-            d="M14 10v44l30-10V10H14Z"
-            stroke="currentColor"
-            stroke-width="5"
-            stroke-linejoin="round"
-          />
-          <circle cx="11" cy="8" r="4" fill="currentColor"/>
-          <circle cx="49" cy="52" r="4" fill="currentColor"/>
-        </svg>
         <span>LOCAL SYNTHESIS</span>
       </div>
       <span class="toolbar-label">DEBUG SET</span>
@@ -2012,6 +2612,8 @@ function createLoadingHtml() {
       var backendReady = false;
       var connecting = false;
       var backgroundProgress = 0;
+      var terminalSequence = 0;
+      var bootstrapCameraStream = null;
 
       function wait(milliseconds) {
         return new Promise(function (resolve) {
@@ -2456,11 +3058,14 @@ function createLoadingHtml() {
         return records;
       }
 
-      function appendTerminalLine(item, index) {
+      function appendTerminalLine(item) {
         var line = document.createElement("div");
-        var timestamp = new Date(
-          Date.now() + index * 17
-        ).toISOString().slice(11, 23);
+        var index = terminalSequence;
+        var timestamp = new Date()
+          .toISOString()
+          .slice(11, 23);
+
+        terminalSequence += 1;
 
         line.className =
           "terminal-line" +
@@ -2475,6 +3080,312 @@ function createLoadingHtml() {
         terminalOutput.appendChild(line);
         terminalOutput.scrollTop =
           terminalOutput.scrollHeight;
+      }
+
+      function appendLiveTerminalLine(
+        cursor,
+        item
+      ) {
+        if (cursor.parentNode) {
+          cursor.remove();
+        }
+
+        appendTerminalLine(item);
+        terminalOutput.appendChild(cursor);
+      }
+
+      async function prepareMainInterface(
+        cursor
+      ) {
+        appendLiveTerminalLine(
+          cursor,
+          record(
+            "INTERACTION LAYER",
+            "[UI] prefetching main shell, static runtimes and current avatar assets",
+            "sync",
+            0
+          )
+        );
+
+        try {
+          if (
+            !window.nekoDesktop ||
+            !window.nekoDesktop.warmMainUi
+          ) {
+            throw new Error(
+              "desktop UI warmup bridge unavailable"
+            );
+          }
+
+          var result =
+            await window.nekoDesktop.warmMainUi();
+
+          if (!result || result.success !== true) {
+            throw new Error(
+              result && result.error
+                ? result.error
+                : "unknown warmup error"
+            );
+          }
+
+          var totalAssetCount =
+            Number(result.staticAssetCount || 0) +
+            Number(result.avatarAssetCount || 0);
+          var totalMegabytes =
+            Number(result.totalBytes || 0) /
+            1024 /
+            1024;
+
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "INTERACTION LAYER",
+              "[OK] UI cache primed // " +
+                totalAssetCount +
+                " assets // " +
+                totalMegabytes.toFixed(1) +
+                " MB // " +
+                Math.round(
+                  Number(result.durationMs) || 0
+                ) +
+                " MS",
+              "ok",
+              0
+            )
+          );
+
+          if (Number(result.failedCount || 0) > 0) {
+            appendLiveTerminalLine(
+              cursor,
+              record(
+                "INTERACTION LAYER",
+                "[WARN] optional UI assets deferred // count=" +
+                  Number(result.failedCount || 0),
+                "warn",
+                0
+              )
+            );
+          }
+
+          return result;
+        } catch (error) {
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "INTERACTION LAYER",
+              "[WARN] UI cache warmup deferred: " +
+                String(
+                  error && error.message
+                    ? error.message
+                    : error
+                ),
+              "warn",
+              0
+            )
+          );
+
+          return {
+            success: false,
+          };
+        }
+      }
+
+      async function prepareVisionAndCamera(
+        cursor
+      ) {
+        var lastStatusToken = "";
+        var stopListening = function () {};
+
+        function showVisionStatus(status) {
+          if (!status || !status.phase) {
+            return;
+          }
+
+          var token =
+            status.phase +
+            ":" +
+            String(status.updatedAt || "");
+
+          if (token === lastStatusToken) {
+            return;
+          }
+
+          lastStatusToken = token;
+          connectionPhase.textContent =
+            "LOCAL VISION / " + status.phase;
+          statusText.textContent =
+            status.message ||
+            "LOCAL VISION INITIALIZING";
+
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "LOCAL VISION",
+              status.message ||
+                "[VISION] state=" + status.phase,
+              status.kind || "",
+              0
+            )
+          );
+        }
+
+        try {
+          if (
+            !window.nekoDesktop ||
+            !window.nekoDesktop.startVision
+          ) {
+            throw new Error(
+              "desktop vision bridge unavailable"
+            );
+          }
+
+          if (
+            window.nekoDesktop.onVisionStatus
+          ) {
+            stopListening =
+              window.nekoDesktop.onVisionStatus(
+                showVisionStatus
+              ) || function () {};
+          }
+
+          if (
+            window.nekoDesktop.getVisionStatus
+          ) {
+            showVisionStatus(
+              await window.nekoDesktop
+                .getVisionStatus()
+            );
+          }
+
+          var visionResult =
+            await window.nekoDesktop.startVision();
+
+          if (!visionResult.success) {
+            appendLiveTerminalLine(
+              cursor,
+              record(
+                "LOCAL VISION",
+                "[WARN] face / pose service unavailable: " +
+                  String(
+                    visionResult.error ||
+                    "unknown error"
+                  ),
+                "warn",
+                0
+              )
+            );
+          }
+        } catch (error) {
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "LOCAL VISION",
+              "[WARN] vision initialization error: " +
+                String(
+                  error && error.message
+                    ? error.message
+                    : error
+                ),
+              "warn",
+              0
+            )
+          );
+        } finally {
+          stopListening();
+        }
+
+        connectionPhase.textContent =
+          "CAMERA / REQUESTING LOCAL DEVICE";
+        statusText.textContent =
+          "REQUESTING CAMERA AFTER OPERATOR CONNECTION";
+        appendLiveTerminalLine(
+          cursor,
+          record(
+            "CAMERA",
+            "[CAM] requesting local camera permission after CONNECT",
+            "sync",
+            0
+          )
+        );
+
+        try {
+          bootstrapCameraStream =
+            await navigator.mediaDevices
+              .getUserMedia({
+                audio: false,
+                video: {
+                  width: {
+                    ideal: 640,
+                  },
+                  height: {
+                    ideal: 360,
+                  },
+                  frameRate: {
+                    ideal: 24,
+                    max: 30,
+                  },
+                  facingMode: "user",
+                },
+              });
+
+          var cameraTrack =
+            bootstrapCameraStream
+              .getVideoTracks()[0];
+          var cameraSettings =
+            cameraTrack.getSettings();
+          var cameraWidth =
+            cameraSettings.width || 0;
+          var cameraHeight =
+            cameraSettings.height || 0;
+          var cameraFps =
+            cameraSettings.frameRate || 0;
+
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "CAMERA",
+              "[OK] camera stream live // " +
+                cameraWidth +
+                "x" +
+                cameraHeight +
+                " @ " +
+                Number(cameraFps).toFixed(1) +
+                " FPS // track=" +
+                cameraTrack.readyState.toUpperCase(),
+              "ok",
+              0
+            )
+          );
+          statusText.textContent =
+            "CAMERA LIVE // LOCAL VISION READY";
+
+          return {
+            visionReady: true,
+            cameraReady: true,
+          };
+        } catch (error) {
+          appendLiveTerminalLine(
+            cursor,
+            record(
+              "CAMERA",
+              "[WARN] camera unavailable: " +
+                String(
+                  error && error.name
+                    ? error.name
+                    : error
+                ),
+              "warn",
+              0
+            )
+          );
+          statusText.textContent =
+            "CAMERA UNAVAILABLE // CONTINUING";
+
+          return {
+            visionReady: true,
+            cameraReady: false,
+          };
+        }
       }
 
       function updateDataTableConnected() {
@@ -2528,6 +3439,11 @@ function createLoadingHtml() {
         cursor.className = "terminal-cursor";
         terminalOutput.appendChild(cursor);
 
+        var mainUiPreparation =
+          prepareMainInterface(cursor);
+        var visionPreparation =
+          prepareVisionAndCamera(cursor);
+
         await wait(260);
 
         var records = buildBootRecords();
@@ -2566,6 +3482,11 @@ function createLoadingHtml() {
           await wait(item.delay + (index % 4) * 8);
         }
 
+        await Promise.all([
+          mainUiPreparation,
+          visionPreparation,
+        ]);
+
         if (cursor.parentNode) {
           cursor.remove();
         }
@@ -2582,6 +3503,16 @@ function createLoadingHtml() {
         connectionProgress.style.width = "100%";
 
         await wait(900);
+
+        if (bootstrapCameraStream) {
+          bootstrapCameraStream
+            .getTracks()
+            .forEach(function (track) {
+              track.stop();
+            });
+          bootstrapCameraStream = null;
+        }
+
         window.location.assign(mainUiUrl);
       }
 
@@ -2796,7 +3727,7 @@ function configurePermissions() {
         '';
 
       const allowed =
-        isNekoUrl(requestingUrl) &&
+        isInternalPage(requestingUrl) &&
         allowedPermissions.has(permission);
 
       callback(allowed);
@@ -2817,7 +3748,7 @@ function configurePermissions() {
         '';
 
       return (
-        isNekoUrl(requestingUrl) &&
+        isInternalPage(requestingUrl) &&
         allowedPermissions.has(permission)
       );
     }
@@ -3119,6 +4050,10 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
+      // 摄像头追踪必须在窗口短暂失焦（例如截屏或切到聊天窗口）时
+      // 继续以正常频率运行。Chromium 默认会把后台页面计时器降到约
+      // 1~2 秒一次，这会让人脸目标在两帧之间失效并反复回正。
+      backgroundThrottling: false,
       preload: PRELOAD_PATH,
     },
   });
@@ -3249,6 +4184,8 @@ async function startApplication() {
  * ============================================================
  */
 
+app.setName('N.E.K.O');
+
 /**
  * 防止同时运行多个 Electron 实例。
  */
@@ -3281,6 +4218,96 @@ if (!acquiredSingleInstanceLock) {
       ipcMain.handle(
         'neko:reset-app',
         resetApplication
+      );
+
+      ipcMain.handle(
+        'neko:get-brand-logo',
+        (event) => {
+          const senderUrl =
+            event.senderFrame?.url ||
+            event.sender?.getURL() ||
+            '';
+
+          if (!isInternalPage(senderUrl)) {
+            throw new Error(
+              '已阻止外部页面读取品牌资源。'
+            );
+          }
+
+          return BRAND_LOGO_DATA_URL;
+        }
+      );
+
+      ipcMain.handle(
+        'neko:warm-main-ui',
+        (event) => {
+          const senderUrl =
+            event.senderFrame?.url ||
+            event.sender?.getURL() ||
+            '';
+
+          if (!isInternalPage(senderUrl)) {
+            throw new Error(
+              '已阻止外部页面预热主界面资源。'
+            );
+          }
+
+          return warmMainUiResources();
+        }
+      );
+
+      ipcMain.handle(
+        'neko:start-vision',
+        (event) => {
+          const senderUrl =
+            event.senderFrame?.url ||
+            event.sender?.getURL() ||
+            '';
+
+          if (!isInternalPage(senderUrl)) {
+            throw new Error(
+              '已阻止外部页面启动视觉服务。'
+            );
+          }
+
+          return prepareVisionAfterConnect();
+        }
+      );
+
+      ipcMain.handle(
+        'neko:get-vision-status',
+        (event) => {
+          const senderUrl =
+            event.senderFrame?.url ||
+            event.sender?.getURL() ||
+            '';
+
+          if (!isInternalPage(senderUrl)) {
+            throw new Error(
+              '已阻止外部页面读取视觉状态。'
+            );
+          }
+
+          return visionStartupStatus;
+        }
+      );
+
+      ipcMain.handle(
+        'neko:vision-analyze',
+        (event, frameBytes) => {
+          const senderUrl =
+            event.senderFrame?.url ||
+            event.sender?.getURL() ||
+            '';
+
+          if (!isNekoUrl(senderUrl)) {
+            throw new Error(
+              '已阻止非 N.E.K.O 页面访问视觉服务。'
+            );
+          }
+
+          return analyzeVisionFrame(frameBytes);
+        }
       );
 
       configurePermissions();

@@ -1,5 +1,5 @@
 # Dependencies and build output
-node_modules/
+node_modules
 dist/
 
 # Local Electron and operating-system state
@@ -43,3 +43,12 @@ token_usage.json
 facts.json
 persona.json
 recent.json
+
+# Local Python environments, caches, and model downloads
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+third_party/
+assets/models/
+_to_delete/
